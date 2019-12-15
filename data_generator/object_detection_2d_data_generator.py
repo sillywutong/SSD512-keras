@@ -263,6 +263,68 @@ class DataGenerator:
             else: tr = range(self.dataset_size)
             for i in tr:
                 self.eval_neutral.append(eval_neutral[i])
+    def parse_deepfashion(self,
+                          images_dir,  #可以包含多个数据集的图片(fashion_data/Img/)
+                          bbox_filename,   #包围框的label文件， imgname xmin ymin xmax ymax
+                          category_filename, #图片对应的类别 (fashion_data/Anno/list_category_img.txt)
+                          classes=[''],
+                          include_classes='all',
+                          random_sample=False,
+                          ret=Fase,
+                          verbose=True):
+        self.images_dir = images_dir
+        self.bbox_filename = bbox_filename
+        self.category_filename = category_filename
+        self.include_classes = include_classes
+        self.classes=classes
+
+        self.filenames = []
+        self.image_ids = []
+        self.labels = []
+
+
+        with open(bbox_filename,'r') as bbox_file:
+            with open(category_filename,'r') as category_file:
+                n_images = int(category_label_file.readline())
+                for i in range(n_images):
+                    self.image_ids.append(str(i))
+                next(category_file)
+                category_ids=[]
+                for line in category_file:
+                    line = line.split()
+                    name = line[0]
+                    cate_id = str(line[1])
+                    self.filenames.append(os.path.join(self.images_dir, name))
+                    category_ids.append(cate_id)
+                i=0
+                next(bbox_file)
+                next(bbox_file)
+                for line in bbox_file:
+                    label_item = []
+                    line = line.split()
+                    xmin = line[1]
+                    ymin = line[2]
+                    xmax = line[3]
+                    ymax = line[4]
+                    label_item.append(category_ids[i])
+                    i+=1
+                    label_item.append(xmin)
+                    label_item.append(ymin)
+                    label_item.append(xmax)
+                    label_item.append(ymax)
+                    self.labels.append(label_item)
+        self.dataset_size = len(self.filenames)
+        self.dataset_indices = np.arrange(self.dataset_size, dtype = np.int32)
+        if self.load_images_into_memory:
+            self.images = []
+            if verbose : it = tqdm(self.filenames, desc='Loading images into memory', file=sys.stdout)
+            else: it = self.filenames
+            for filename in it:
+                with Image.open(filename) as image:
+                    self.images.append(np.array(image, dtype=np.uint8))
+        
+        if ret:
+            return self.images, self.filenames, self.labels, self.image_ids
 
     def parse_csv(self,
                   images_dir,
