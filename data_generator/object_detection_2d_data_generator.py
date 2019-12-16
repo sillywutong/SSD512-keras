@@ -28,6 +28,7 @@ import cv2
 import csv
 import os
 import sys
+import random 
 from tqdm import tqdm, trange
 try:
     import h5py
@@ -267,10 +268,11 @@ class DataGenerator:
                           images_dir,  #可以包含多个数据集的图片(fashion_data/Img/)
                           bbox_filename,   #包围框的label文件， imgname xmin ymin xmax ymax
                           category_filename, #图片对应的类别 (fashion_data/Anno/list_category_img.txt)
+                          partition_filename,
                           classes=[''],
                           include_classes='all',
                           random_sample=False,
-                          ret=Fase,
+                          ret=False,
                           verbose=True):
         self.images_dir = images_dir
         self.bbox_filename = bbox_filename
@@ -281,40 +283,53 @@ class DataGenerator:
         self.filenames = []
         self.image_ids = []
         self.labels = []
-
-
+        labels = []
+        indices = []
+        with open(partition_filename,'r') as partition_file:
+            next(partition_file)
+            next(partition_file)
+            i=0
+            for line in partition_file:
+                line = line.split()
+                if line[1]=='train':
+                    #是训练数据
+                    indices.append(i)
+                    self.image_ids.append(str(i))
+                    self.filenames.append(os.path.join(self.images_dir, line[0]))
+                i+=1
+        
         with open(bbox_filename,'r') as bbox_file:
             with open(category_filename,'r') as category_file:
-                n_images = int(category_label_file.readline())
-                for i in range(n_images):
-                    self.image_ids.append(str(i))
+                next(category_file)
                 next(category_file)
                 category_ids=[]
                 for line in category_file:
                     line = line.split()
-                    name = line[0]
-                    cate_id = str(line[1])
-                    self.filenames.append(os.path.join(self.images_dir, name))
+                    cate_id = int(line[1])
                     category_ids.append(cate_id)
                 i=0
                 next(bbox_file)
                 next(bbox_file)
                 for line in bbox_file:
+                    boxes = []
                     label_item = []
                     line = line.split()
-                    xmin = line[1]
-                    ymin = line[2]
-                    xmax = line[3]
-                    ymax = line[4]
+                    xmin = int(line[1])
+                    ymin = int(line[2])
+                    xmax = int(line[3])
+                    ymax = int(line[4])
                     label_item.append(category_ids[i])
                     i+=1
                     label_item.append(xmin)
                     label_item.append(ymin)
                     label_item.append(xmax)
                     label_item.append(ymax)
-                    self.labels.append(label_item)
+                    boxes.append(label_item)
+                    labels.append(boxes)
+        self.labels = list(np.array(labels)[indices])
         self.dataset_size = len(self.filenames)
-        self.dataset_indices = np.arrange(self.dataset_size, dtype = np.int32)
+        self.dataset_indices = np.arange(self.dataset_size, dtype = np.int32)
+
         if self.load_images_into_memory:
             self.images = []
             if verbose : it = tqdm(self.filenames, desc='Loading images into memory', file=sys.stdout)
@@ -325,7 +340,165 @@ class DataGenerator:
         
         if ret:
             return self.images, self.filenames, self.labels, self.image_ids
+    def parse_deepfashion_val(self,
+                              images_dir,
+                              bbox_filename,
+                              category_filename,
+                              partition_filename,
+                              size,
+                              classes=[''],
+                              include_classes='all',
+                              random_sample=False,
+                              ret=False,
+                              verbose=True):
+        self.images_dir = images_dir
+        self.bbox_filename = bbox_filename
+        self.category_filename = category_filename
+        self.include_classes = include_classes
+        self.classes=classes
 
+        self.filenames = []
+        self.image_ids = []
+        self.labels = []
+        labels = []
+        indices = []
+        with open(partition_filename,'r') as partition_file:
+            next(partition_file)
+            next(partition_file)
+            i=0
+            for line in partition_file:
+                line = line.split()
+                if line[1]=='val':
+                    #是训练数据
+                    indices.append(i)
+                    self.image_ids.append(str(i))
+                    self.filenames.append(os.path.join(self.images_dir, line[0]))
+                i+=1
+        
+        with open(bbox_filename,'r') as bbox_file:
+            with open(category_filename,'r') as category_file:
+                next(category_file)
+                next(category_file)
+                category_ids=[]
+                for line in category_file:
+                    line = line.split()
+                    cate_id = int(line[1])
+                    category_ids.append(cate_id)
+                i=0
+                next(bbox_file)
+                next(bbox_file)
+                for line in bbox_file:
+                    boxes = []
+                    label_item = []
+                    line = line.split()
+                    xmin = int(line[1])
+                    ymin = int(line[2])
+                    xmax = int(line[3])
+                    ymax = int(line[4])
+                    label_item.append(category_ids[i])
+                    i+=1
+                    label_item.append(xmin)
+                    label_item.append(ymin)
+                    label_item.append(xmax)
+                    label_item.append(ymax)
+                    boxes.append(label_item)
+                    labels.append(boxes)
+        indexes = np.arange(len(indices))
+        random.shuffle(indexes)
+        indexes = indexes[:size]
+        self.labels = np.array(labels)[indices][indexes]
+        self.filenames = np.array(self.filenames)[indexes]
+        self.image_ids = np.array(self.image_ids)[indexes]
+        self.dataset_size = len(self.filenames)
+        self.dataset_indices = np.arange(self.dataset_size, dtype = np.int32)   
+
+       
+        if self.load_images_into_memory:
+            self.images = []
+            if verbose : it = tqdm(self.filenames, desc='Loading images into memory', file=sys.stdout)
+            else: it = self.filenames
+            for filename in it:
+                with Image.open(filename) as image:
+                    self.images.append(np.array(image, dtype=np.uint8))
+        
+        if ret:
+            return self.images, self.filenames, self.labels, self.image_ids
+    def parse_deepfashion_test(self,
+                              images_dir,
+                              bbox_filename,
+                              category_filename,
+                              classes=[''],
+                              include_classes='all',
+                              random_sample=False,
+                              ret=False,
+                              verbose=True):
+        self.images_dir = images_dir
+        self.bbox_filename = bbox_filename
+        self.category_filename = category_filename
+        self.include_classes = include_classes
+        self.classes=classes
+
+        self.filenames = []
+        self.image_ids = []
+        self.labels = []
+        labels = []
+        indices = []
+        with open(partition_filename,'r') as partition_file:
+            next(partition_file)
+            next(partition_file)
+            i=0
+            for line in partition_file:
+                line = line.split()
+                if line[1]=='test':
+                    #是训练数据
+                    indices.append(i)
+                    self.image_ids.append(str(i))
+                    self.filenames.append(os.path.join(self.images_dir,line[0]))
+                i+=1
+        
+        with open(bbox_filename,'r') as bbox_file:
+            with open(category_filename,'r') as category_file:
+                next(category_file)
+                next(category_file)
+                category_ids=[]
+                for line in category_file:
+                    line = line.split()
+                    cate_id = int(line[1])
+                    category_ids.append(cate_id)
+                i=0
+                next(bbox_file)
+                next(bbox_file)
+                for line in bbox_file:
+                    boxes = []
+                    label_item = []
+                    line = line.split()
+                    xmin = int(line[1])
+                    ymin = int(line[2])
+                    xmax = int(line[3])
+                    ymax = int(line[4])
+                    label_item.append(category_ids[i])
+                    i+=1
+                    label_item.append(xmin)
+                    label_item.append(ymin)
+                    label_item.append(xmax)
+                    label_item.append(ymax)
+                    boxes.append(label_item)
+                    labels.append(boxes)
+        self.labels = list(np.array(labels)[indices])
+        self.dataset_size = len(self.filenames)
+        self.dataset_indices = np.arange(self.dataset_size, dtype = np.int32)   
+
+       
+        if self.load_images_into_memory:
+            self.images = []
+            if verbose : it = tqdm(self.filenames, desc='Loading images into memory', file=sys.stdout)
+            else: it = self.filenames
+            for filename in it:
+                with Image.open(filename) as image:
+                    self.images.append(np.array(image, dtype=np.uint8))
+        
+        if ret:
+            return self.images, self.filenames, self.labels, self.image_ids
     def parse_csv(self,
                   images_dir,
                   labels_filename,
@@ -1232,7 +1405,6 @@ class DataGenerator:
             if 'inverse_transform' in returns: ret.append(batch_inverse_transforms)
             if 'original_images' in returns: ret.append(batch_original_images)
             if 'original_labels' in returns: ret.append(batch_original_labels)
-
             yield ret
 
     def save_dataset(self,

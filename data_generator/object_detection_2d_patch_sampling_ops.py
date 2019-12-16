@@ -264,7 +264,6 @@ class CropPad:
         self.labels_format = labels_format
 
     def __call__(self, image, labels=None, return_inverter=False):
-
         img_height, img_width = image.shape[:2]
 
         if (self.patch_ymin > img_height) or (self.patch_xmin > img_width):
@@ -675,7 +674,6 @@ class RandomPatchInf:
         img_height, img_width = image.shape[:2]
         self.patch_coord_generator.img_height = img_height
         self.patch_coord_generator.img_width = img_width
-
         xmin = self.labels_format['xmin']
         ymin = self.labels_format['ymin']
         xmax = self.labels_format['xmax']
